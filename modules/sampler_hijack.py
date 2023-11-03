@@ -15,7 +15,7 @@ global_scores = None
 
 class TailFreeLogitsWarper(LogitsWarper):
     def __init__(self, tfs: float, filter_value: float = -float("Inf"), min_tokens_to_keep: int = 1):
-        tfs = float(tfs)
+        tfs = tfs
         if tfs < 0 or tfs > 1.0:
             raise ValueError(f"`tfs` has to be a float >= 0 and <= 1, but is {tfs}")
         self.tfs = tfs
@@ -55,7 +55,7 @@ class TailFreeLogitsWarper(LogitsWarper):
 
 class TopALogitsWarper(LogitsWarper):
     def __init__(self, top_a: float, filter_value: float = -float("Inf"), min_tokens_to_keep: int = 1):
-        top_a = float(top_a)
+        top_a = top_a
         if top_a < 0 or top_a > 1.0:
             raise ValueError(f"`top_a` has to be a float >= 0 and <= 1, but is {top_a}")
         self.top_a = top_a
@@ -99,10 +99,7 @@ class MirostatLogitsWarper(LogitsWarper):
         # Truncate the words with surprise values greater than mu
         for i, candidate in enumerate(prob_original):
             if candidate > 0 and -math.log2(candidate) > self.mu:
-                if (i == 0):
-                    sorted_logits = sorted_logits[:1]
-                else:
-                    sorted_logits = sorted_logits[:i]
+                sorted_logits = sorted_logits[:1] if (i == 0) else sorted_logits[:i]
                 break
 
         # Normalize the probabilities of the remaining words
@@ -143,7 +140,7 @@ class RepetitionPenaltyLogitsProcessorWithRange(LogitsProcessor):
     '''
 
     def __init__(self, penalty: float, presence_penalty: float, frequency_penalty: float, _range: int):
-        if not (penalty > 0):
+        if penalty <= 0:
             raise ValueError(f"`penalty` has to be strictly positive, but is {penalty}")
 
         self.penalty = penalty

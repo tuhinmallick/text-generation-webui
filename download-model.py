@@ -40,7 +40,7 @@ class ModelDownloader:
         if model[-1] == '/':
             model = model[:-1]
 
-        if model.startswith(base + '/'):
+        if model.startswith(f'{base}/'):
             model = model[len(base) + 1:]
 
         model_parts = model.split(":")
@@ -207,11 +207,12 @@ class ModelDownloader:
 
         if not is_llamacpp:
             metadata = f'url: https://huggingface.co/{model}\n' \
-                       f'branch: {branch}\n' \
-                       f'download date: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n'
+                           f'branch: {branch}\n' \
+                           f'download date: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n'
 
-            sha256_str = '\n'.join([f'    {item[1]} {item[0]}' for item in sha256])
-            if sha256_str:
+            if sha256_str := '\n'.join(
+                [f'    {item[1]} {item[0]}' for item in sha256]
+            ):
                 metadata += f'sha256sum:\n{sha256_str}'
 
             metadata += '\n'

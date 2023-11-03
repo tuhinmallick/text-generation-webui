@@ -28,7 +28,7 @@ class RWKVModel:
         pass
 
     @classmethod
-    def from_pretrained(self, path, dtype="bf16" if is_torch_xpu_available() else "fp16", device="xpu" if is_torch_xpu_available() else "cuda"):
+    def from_pretrained(cls, path, dtype="bf16" if is_torch_xpu_available() else "fp16", device="xpu" if is_torch_xpu_available() else "cuda"):
         tokenizer_path = Path(f"{path.parent}/20B_tokenizer.json")
         if shared.args.rwkv_strategy is None:
             model = RWKV(model=str(path), strategy=f'{device} {dtype}')
@@ -36,7 +36,7 @@ class RWKVModel:
             model = RWKV(model=str(path), strategy=shared.args.rwkv_strategy)
 
         pipeline = PIPELINE(model, str(tokenizer_path))
-        result = self()
+        result = cls()
         result.pipeline = pipeline
         result.model = model
         result.cached_context = ""
@@ -63,9 +63,12 @@ class RWKVModel:
                 self.cached_model_state = None
                 self.cached_output_logits = None
 
-        # out = self.pipeline.generate(prompt, token_count=state['max_new_tokens'], args=args, callback=callback)
-        out = self.generate_from_cached_state(prompt, token_count=state['max_new_tokens'], args=args, callback=callback)
-        return out
+        return self.generate_from_cached_state(
+            prompt,
+            token_count=state['max_new_tokens'],
+            args=args,
+            callback=callback,
+        )
 
     def generate_with_streaming(self, *args, **kwargs):
         with Iteratorize(self.generate, args, kwargs, callback=None) as generator:
@@ -97,11 +100,6 @@ class RWKVModel:
             if i == 0:
                 begin_token = len(all_tokens)
                 last_token_posi = begin_token
-            # cache the model state after scanning the context
-            # we don't cache the state after processing our own generated tokens because
-            # the output string might be post-processed arbitrarily. Therefore, what's fed into the model
-            # on the next round of chat might be slightly different what what it output on the previous round
-            if i == 0:
                 self.cached_context += ctx
                 self.cached_model_state = copy.deepcopy(state)
                 self.cached_output_logits = copy.deepcopy(out)
@@ -140,10 +138,10 @@ class RWKVTokenizer:
         pass
 
     @classmethod
-    def from_pretrained(self, path):
+    def from_pretrained(cls, path):
         tokenizer_path = path / "20B_tokenizer.json"
         tokenizer = Tokenizer.from_file(str(tokenizer_path))
-        result = self()
+        result = cls()
         result.tokenizer = tokenizer
         return result
 

@@ -17,7 +17,7 @@ class LogitsBiasProcessor(LogitsProcessor):
     def __init__(self, logit_bias={}):
         self.logit_bias = logit_bias
         if self.logit_bias:
-            self.keys = list([int(key) for key in self.logit_bias.keys()])
+            self.keys = [int(key) for key in self.logit_bias.keys()]
             values = [self.logit_bias[str(key)] for key in self.keys]
             self.values = torch.tensor(values, dtype=torch.float, device=shared.model.device)
             debug_msg(f"{self})")
@@ -105,8 +105,7 @@ def marshal_common_params(body):
     # user - ignored
 
     logits_processor = []
-    logit_bias = body.get('logit_bias', None)
-    if logit_bias:  # {str: float, ...}
+    if logit_bias := body.get('logit_bias', None):
         # XXX convert tokens from tiktoken based on requested model
         # Ex.: 'logit_bias': {'1129': 100, '11442': 100, '16243': 100}
         try:
@@ -114,7 +113,7 @@ def marshal_common_params(body):
             new_logit_bias = {}
             for logit, bias in logit_bias.items():
                 for x in encode(encoder.decode([int(logit)]), add_special_tokens=False)[0]:
-                    if int(x) in [0, 1, 2, 29871]:  # XXX LLAMA tokens
+                    if int(x) in {0, 1, 2, 29871}:  # XXX LLAMA tokens
                         continue
                     new_logit_bias[str(int(x))] = bias
             debug_msg('logit_bias_map', logit_bias, '->', new_logit_bias)
@@ -509,7 +508,7 @@ def completions(body: dict, is_legacy: bool = False):
 
         resp_list_data.extend([respi])
 
-    resp = {
+    return {
         "id": cmpl_id,
         "object": object_type,
         "created": created_time,
@@ -518,11 +517,10 @@ def completions(body: dict, is_legacy: bool = False):
         "usage": {
             "prompt_tokens": total_prompt_token_count,
             "completion_tokens": total_completion_token_count,
-            "total_tokens": total_prompt_token_count + total_completion_token_count
-        }
+            "total_tokens": total_prompt_token_count
+            + total_completion_token_count,
+        },
     }
-
-    return resp
 
 
 # generator

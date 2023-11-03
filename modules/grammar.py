@@ -21,10 +21,7 @@ class GrammarLogitsProcessor(LogitsProcessor):
             else:
                 sampler = None
 
-        if sampler is not None:
-            grammar = sampler.logits_processor()
-        else:
-            grammar = None
+        grammar = sampler.logits_processor() if sampler is not None else None
 
     def __call__(self, input_ids, scores):
         if grammar is not None:

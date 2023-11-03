@@ -35,7 +35,7 @@ def default_preset():
 
 
 def presets_params():
-    return [k for k in default_preset()]
+    return list(default_preset())
 
 
 def load_preset(name):
