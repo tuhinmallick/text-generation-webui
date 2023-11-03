@@ -35,7 +35,7 @@ class ExllamaModel:
         pass
 
     @classmethod
-    def from_pretrained(self, path_to_model):
+    def from_pretrained(cls, path_to_model):
 
         path_to_model = Path(f'{shared.args.model_dir}') / Path(path_to_model)
         tokenizer_model_path = path_to_model / "tokenizer.model"
@@ -44,8 +44,7 @@ class ExllamaModel:
         # Find the model checkpoint
         model_path = None
         for ext in ['.safetensors', '.pt', '.bin']:
-            found = list(path_to_model.glob(f"*{ext}"))
-            if len(found) > 0:
+            if found := list(path_to_model.glob(f"*{ext}")):
                 if len(found) > 1:
                     logger.warning(f'More than one {ext} model has been found. The last one will be selected. It could be wrong.')
 
@@ -77,7 +76,7 @@ class ExllamaModel:
         cache = ExLlamaCache(model)
         generator = ExLlamaGenerator(model, tokenizer, cache)
 
-        result = self()
+        result = cls()
         result.config = config
         result.model = model
         result.cache = cache
@@ -112,12 +111,11 @@ class ExllamaModel:
                 clear_torch_cache()
                 self.cache = ExLlamaCache(self.model)
                 self.generator = ExLlamaGenerator(self.model, self.tokenizer, self.cache)
-        else:
-            if self.cache.batch_size == 1:
-                del self.cache
-                clear_torch_cache()
-                self.cache = ExLlamaCache(self.model, batch_size=2)
-                self.generator = ExLlamaGenerator(self.model, self.tokenizer, self.cache)
+        elif self.cache.batch_size == 1:
+            del self.cache
+            clear_torch_cache()
+            self.cache = ExLlamaCache(self.model, batch_size=2)
+            self.generator = ExLlamaGenerator(self.model, self.tokenizer, self.cache)
 
         self.generator.settings.temperature = state['temperature']
         self.generator.settings.top_p = state['top_p']
@@ -131,9 +129,10 @@ class ExllamaModel:
             self.generator.disallow_tokens(None)
 
         if state['custom_token_bans']:
-            to_ban = [int(x) for x in state['custom_token_bans'].split(',')]
-            if len(to_ban) > 0:
+            if to_ban := [int(x) for x in state['custom_token_bans'].split(',')]:
                 self.generator.disallow_tokens(to_ban)
+
+        has_leading_space = False
 
         # Case 1: no CFG
         if state['guidance_scale'] == 1:
@@ -154,8 +153,6 @@ class ExllamaModel:
 
             self.generator.gen_begin_reuse(ids)
             initial_len = self.generator.sequence[0].shape[0]
-            has_leading_space = False
-
             for i in range(max_new_tokens):
                 token = self.generator.gen_single_token()
                 if i == 0 and self.generator.tokenizer.tokenizer.IdToPiece(int(token)).startswith('▁'):
@@ -163,14 +160,12 @@ class ExllamaModel:
 
                 decoded_text = self.generator.tokenizer.decode(self.generator.sequence[0][initial_len:])
                 if has_leading_space:
-                    decoded_text = ' ' + decoded_text
+                    decoded_text = f' {decoded_text}'
 
                 yield decoded_text
                 if token.item() == self.generator.tokenizer.eos_token_id or shared.stop_everything:
                     break
 
-        # Case 2: CFG
-        # Copied from https://github.com/turboderp/exllama/blob/master/example_cfg.py
         else:
             alpha = state['guidance_scale']
             prompts = [prompt, state['negative_prompt'] or '']
@@ -188,8 +183,6 @@ class ExllamaModel:
 
             self.generator.gen_begin(ids, mask=mask)
             initial_len = self.generator.sequence[0].shape[0]
-            has_leading_space = False
-
             for i in range(max_new_tokens):
                 logits = self.model.forward(self.generator.sequence[:, -1:], self.cache, input_mask=mask)
                 self.generator.apply_rep_penalty(logits)
@@ -203,7 +196,7 @@ class ExllamaModel:
 
                 decoded_text = self.generator.tokenizer.decode(self.generator.sequence[0][initial_len:])
                 if has_leading_space:
-                    decoded_text = ' ' + decoded_text
+                    decoded_text = f' {decoded_text}'
 
                 yield decoded_text
                 if token.item() == self.tokenizer.eos_token_id or shared.stop_everything:

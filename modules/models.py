@@ -129,12 +129,11 @@ def huggingface_loader(model_name):
 
     if 'chatglm' in model_name.lower():
         LoaderClass = AutoModel
+    elif config.to_dict().get('is_encoder_decoder', False):
+        LoaderClass = AutoModelForSeq2SeqLM
+        shared.is_seq2seq = True
     else:
-        if config.to_dict().get('is_encoder_decoder', False):
-            LoaderClass = AutoModelForSeq2SeqLM
-            shared.is_seq2seq = True
-        else:
-            LoaderClass = AutoModelForCausalLM
+        LoaderClass = AutoModelForCausalLM
 
     # Load the model in simple 16-bit mode by default
     if not any([shared.args.cpu, shared.args.load_in_8bit, shared.args.load_in_4bit, shared.args.auto_devices, shared.args.disk, shared.args.deepspeed, shared.args.gpu_memory is not None, shared.args.cpu_memory is not None, shared.args.compress_pos_emb > 1, shared.args.alpha_value > 1, shared.args.disable_exllama]):
@@ -148,14 +147,12 @@ def huggingface_loader(model_name):
         else:
             model = model.cuda()
 
-    # DeepSpeed ZeRO-3
     elif shared.args.deepspeed:
         model = LoaderClass.from_pretrained(path_to_model, torch_dtype=params['torch_dtype'])
         model = deepspeed.initialize(model=model, config_params=ds_config, model_parameters=None, optimizer=None, lr_scheduler=None)[0]
         model.module.eval()  # Inference
         logger.info(f'DeepSpeed ZeRO-3 is enabled: {is_deepspeed_zero3_enabled()}')
 
-    # Load with quantization and/or offloading
     else:
 
         if not any((shared.args.cpu, torch.cuda.is_available(), is_xpu_available(), torch.backends.mps.is_available())):
@@ -173,12 +170,17 @@ def huggingface_loader(model_name):
                 # and https://huggingface.co/blog/4bit-transformers-bitsandbytes
                 quantization_config_params = {
                     'load_in_4bit': True,
-                    'bnb_4bit_compute_dtype': eval("torch.{}".format(shared.args.compute_dtype)) if shared.args.compute_dtype in ["bfloat16", "float16", "float32"] else None,
+                    'bnb_4bit_compute_dtype': eval(
+                        f"torch.{shared.args.compute_dtype}"
+                    )
+                    if shared.args.compute_dtype
+                    in ["bfloat16", "float16", "float32"]
+                    else None,
                     'bnb_4bit_quant_type': shared.args.quant_type,
                     'bnb_4bit_use_double_quant': shared.args.use_double_quant,
                 }
 
-                logger.info('Using the following 4-bit params: ' + str(quantization_config_params))
+                logger.info(f'Using the following 4-bit params: {quantization_config_params}')
                 params['quantization_config'] = BitsAndBytesConfig(**quantization_config_params)
 
             elif shared.args.load_in_8bit:
@@ -268,20 +270,19 @@ def ctransformers_loader(model_name):
     ctrans = CtransformersModel()
     if ctrans.model_type_is_auto():
         model_file = path
+    elif path.is_file():
+        model_file = path
     else:
-        if path.is_file():
-            model_file = path
+        entries = Path(f'{shared.args.model_dir}/{model_name}')
+        gguf = list(entries.glob('*.gguf'))
+        bin = list(entries.glob('*.bin'))
+        if gguf:
+            model_file = gguf[0]
+        elif len(bin) > 0:
+            model_file = bin[0]
         else:
-            entries = Path(f'{shared.args.model_dir}/{model_name}')
-            gguf = list(entries.glob('*.gguf'))
-            bin = list(entries.glob('*.bin'))
-            if len(gguf) > 0:
-                model_file = gguf[0]
-            elif len(bin) > 0:
-                model_file = bin[0]
-            else:
-                logger.error("Could not find a model for ctransformers.")
-                return None, None
+            logger.error("Could not find a model for ctransformers.")
+            return None, None
 
     logger.info(f'ctransformers weights detected: {model_file}')
     model, tokenizer = ctrans.from_pretrained(model_file)
@@ -293,17 +294,15 @@ def AutoAWQ_loader(model_name):
 
     model_dir = Path(f'{shared.args.model_dir}/{model_name}')
 
-    model = AutoAWQForCausalLM.from_quantized(
-                quant_path=model_dir,
-                max_new_tokens=shared.args.max_seq_len,
-                trust_remote_code=shared.args.trust_remote_code,
-                fuse_layers=not shared.args.no_inject_fused_attention,
-                max_memory=get_max_memory_dict(),
-                batch_size=1,
-                safetensors=any(model_dir.glob('*.safetensors')),
-            )
-
-    return model
+    return AutoAWQForCausalLM.from_quantized(
+        quant_path=model_dir,
+        max_new_tokens=shared.args.max_seq_len,
+        trust_remote_code=shared.args.trust_remote_code,
+        fuse_layers=not shared.args.no_inject_fused_attention,
+        max_memory=get_max_memory_dict(),
+        batch_size=1,
+        safetensors=any(model_dir.glob('*.safetensors')),
+    )
 
 
 def GPTQ_loader(model_name):
@@ -398,7 +397,7 @@ def get_max_memory_dict():
         logger.warning(f"Auto-assiging --gpu-memory {suggestion} for your GPU to try to prevent out-of-memory errors. You can manually set other values.")
         max_memory = {0: f'{suggestion}GiB', 'cpu': f'{shared.args.cpu_memory or 99}GiB'}
 
-    return max_memory if len(max_memory) > 0 else None
+    return max_memory if max_memory else None
 
 
 def clear_torch_cache():

@@ -205,7 +205,7 @@ def _run_server(port: int, share: bool = False, tunnel_id=str):
 
     ssl_certfile = shared.args.ssl_certfile
     ssl_keyfile = shared.args.ssl_keyfile
-    ssl_verify = True if (ssl_keyfile and ssl_certfile) else False
+    ssl_verify = bool((ssl_keyfile and ssl_certfile))
     if ssl_verify:
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(ssl_certfile, ssl_keyfile)

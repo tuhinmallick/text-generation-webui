@@ -24,7 +24,6 @@ except ModuleNotFoundError:
         'Try installing flash-attention following the instructions here: '
         'https://github.com/Dao-AILab/flash-attention#installation-and-features'
     )
-    pass
 except Exception:
     logger.warning('Failed to load flash-attention due to the following error:\n')
     traceback.print_exc()
@@ -35,7 +34,7 @@ class Exllamav2Model:
         pass
 
     @classmethod
-    def from_pretrained(self, path_to_model):
+    def from_pretrained(cls, path_to_model):
 
         path_to_model = Path(f'{shared.args.model_dir}') / Path(path_to_model)
 
@@ -59,7 +58,7 @@ class Exllamav2Model:
         cache = ExLlamaV2Cache(model)
         generator = ExLlamaV2BaseGenerator(model, cache, tokenizer)
 
-        result = self()
+        result = cls()
         result.model = model
         result.cache = cache
         result.tokenizer = tokenizer
@@ -97,8 +96,7 @@ class Exllamav2Model:
             settings.disallow_tokens(self.tokenizer, [self.tokenizer.eos_token_id])
 
         if state['custom_token_bans']:
-            to_ban = [int(x) for x in state['custom_token_bans'].split(',')]
-            if len(to_ban) > 0:
+            if to_ban := [int(x) for x in state['custom_token_bans'].split(',')]:
                 settings.disallow_tokens(self.tokenizer, to_ban)
 
         ids = self.tokenizer.encode(prompt, add_bos=state['add_bos_token'], encode_special_tokens=True)
@@ -125,7 +123,7 @@ class Exllamav2Model:
 
             decoded_text = self.tokenizer.decode(ids[:, initial_len:], decode_special_tokens=not state['skip_special_tokens'])[0]
             if has_leading_space:
-                decoded_text = ' ' + decoded_text
+                decoded_text = f' {decoded_text}'
 
             yield decoded_text
 

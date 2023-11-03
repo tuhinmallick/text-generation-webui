@@ -103,7 +103,7 @@ async def _handle_connection(websocket, path):
 async def _run(host: str, port: int):
     ssl_certfile = shared.args.ssl_certfile
     ssl_keyfile = shared.args.ssl_keyfile
-    ssl_verify = True if (ssl_keyfile and ssl_certfile) else False
+    ssl_verify = bool((ssl_keyfile and ssl_certfile))
     if ssl_verify:
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(ssl_certfile, ssl_keyfile)
@@ -118,7 +118,7 @@ def _run_server(port: int, share: bool = False, tunnel_id=str):
     address = '0.0.0.0' if shared.args.listen else '127.0.0.1'
     ssl_certfile = shared.args.ssl_certfile
     ssl_keyfile = shared.args.ssl_keyfile
-    ssl_verify = True if (ssl_keyfile and ssl_certfile) else False
+    ssl_verify = bool((ssl_keyfile and ssl_certfile))
 
     def on_start(public_url: str):
         public_url = public_url.replace('https://', 'wss://')

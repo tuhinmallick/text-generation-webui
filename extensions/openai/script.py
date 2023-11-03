@@ -67,7 +67,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def send_sse(self, chunk: dict):
-        response = 'data: ' + json.dumps(chunk) + '\r\n\r\n'
+        response = f'data: {json.dumps(chunk)}' + '\r\n\r\n'
         debug_msg(response[:-4])
         self.wfile.write(response.encode('utf-8'))
 
@@ -159,20 +159,20 @@ class Handler(BaseHTTPRequestHandler):
                 headers=self.headers,
                 environ={'REQUEST_METHOD': 'POST', 'CONTENT_TYPE': self.headers['Content-Type']}
             )
-            
+
             audio_file = form['file'].file
             audio_data = AudioSegment.from_file(audio_file)
-            
+
             # Convert AudioSegment to raw data
             raw_data = audio_data.raw_data
-            
+
             # Create AudioData object
             audio_data = sr.AudioData(raw_data, audio_data.frame_rate, audio_data.sample_width)
             whipser_language = form.getvalue('language', None)
             whipser_model = form.getvalue('model', 'tiny')  # Use the model from the form data if it exists, otherwise default to tiny
 
             transcription = {"text": ""}
-            
+
             try:
                 transcription["text"] = r.recognize_whisper(audio_data, language=whipser_language, model=whipser_model)
             except sr.UnknownValueError:
@@ -181,10 +181,10 @@ class Handler(BaseHTTPRequestHandler):
             except sr.RequestError as e:
                 print("Could not request results from Whisper", e)
                 transcription["text"] = "Whisper could not understand audio RequestError"
-            
+
             self.return_json(transcription, no_debug=True)
             return   
-            
+
         debug_msg(self.requestline)
         debug_msg(self.headers)
 
@@ -215,9 +215,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise ServiceUnavailableError("No model loaded.")
 
             is_legacy = '/generate' in self.path
-            is_streaming = body.get('stream', False)
-
-            if is_streaming:
+            if is_streaming := body.get('stream', False):
                 self.start_sse()
 
                 response = []
@@ -323,15 +321,15 @@ def run_server():
     port = int(os.environ.get('OPENEDAI_PORT', params.get('port', 5001)))
     server_addr = ('0.0.0.0' if shared.args.listen else '127.0.0.1', port)
     server = ThreadingHTTPServer(server_addr, Handler)
-    
+
     ssl_certfile=os.environ.get('OPENEDAI_CERT_PATH', shared.args.ssl_certfile)
     ssl_keyfile=os.environ.get('OPENEDAI_KEY_PATH', shared.args.ssl_keyfile)
-    ssl_verify=True if (ssl_keyfile and ssl_certfile) else False
+    ssl_verify = bool((ssl_keyfile and ssl_certfile))
     if ssl_verify:        
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(ssl_certfile, ssl_keyfile)
         server.socket = context.wrap_socket(server.socket, server_side=True)
-        
+
     if shared.args.share:
         try:
             from flask_cloudflared import _run_cloudflared
@@ -339,12 +337,11 @@ def run_server():
             print(f'OpenAI compatible API ready at: OPENAI_API_BASE={public_url}/v1')
         except ImportError:
             print('You should install flask_cloudflared manually')
+    elif ssl_verify:
+        print(f'OpenAI compatible API ready at: OPENAI_API_BASE=https://{server_addr[0]}:{server_addr[1]}/v1')
     else:
-        if ssl_verify:
-            print(f'OpenAI compatible API ready at: OPENAI_API_BASE=https://{server_addr[0]}:{server_addr[1]}/v1')
-        else:
-            print(f'OpenAI compatible API ready at: OPENAI_API_BASE=http://{server_addr[0]}:{server_addr[1]}/v1')
-    
+        print(f'OpenAI compatible API ready at: OPENAI_API_BASE=http://{server_addr[0]}:{server_addr[1]}/v1')
+
     server.serve_forever()
 
 
